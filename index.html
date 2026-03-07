@@ -1528,13 +1528,6 @@ async function analyzePhoto() {
 // ═══════════════════════════════════════════════
 //  NANO BANANA 2 — IMAGE-TO-IMAGE (Gemini API)
 // ═══════════════════════════════════════════════
-async function generateDalleImage() {
-  if (!uploadedImgBase64) return;
-  const res = await fetch('/.netlify/functions/analyze', {
-  method: 'POST',
-  headers: { 'Content-Type': 'application/json' },
-  body: JSON.stringify({ imageBase64: uploadedImgBase64, prompt })
-});
 
   // Show section + loading
   document.getElementById('dalle-section').style.display = 'block';

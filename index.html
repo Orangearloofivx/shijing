@@ -1655,6 +1655,7 @@ async function generateDalleImage() {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
+            model,
             contents: [{
               parts: [
                 { inline_data: { mime_type: mimeType, data: base64Data } },

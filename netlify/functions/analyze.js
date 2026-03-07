@@ -5,23 +5,32 @@ exports.handler = async (event) => {
   if (event.httpMethod !== 'POST') {
     return {
       statusCode: 405,
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ error: { message: 'Method Not Allowed' } })
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        error: { message: 'Method Not Allowed' }
+      })
     };
   }
 
   try {
     const body = JSON.parse(event.body || '{}');
 
-    // OpenAI: 只要是 gpt-* 就走 OpenAI
-    const isOpenAI = typeof body.model === 'string' && body.model.startsWith('gpt-');
+    // OpenAI: model 以 gpt- 开头就走 OpenAI
+    const isOpenAI =
+      typeof body.model === 'string' && body.model.startsWith('gpt-');
 
     if (isOpenAI) {
       if (!OPENAI_KEY) {
         return {
           statusCode: 500,
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ error: { message: 'Missing OPENAI_API_KEY' } })
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            error: { message: 'Missing OPENAI_API_KEY' }
+          })
         };
       }
 
@@ -38,7 +47,9 @@ exports.handler = async (event) => {
 
       return {
         statusCode: response.status,
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json'
+        },
         body: JSON.stringify(data)
       };
     }
@@ -47,18 +58,26 @@ exports.handler = async (event) => {
     if (!GEMINI_KEY) {
       return {
         statusCode: 500,
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ error: { message: 'Missing GEMINI_API_KEY' } })
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          error: { message: 'Missing GEMINI_API_KEY' }
+        })
       };
     }
 
+    // 前端传什么模型，就用什么模型；没传就给默认值
     const geminiModel = body.model || 'gemini-2.0-flash-exp';
 
-    // 关键：如果前端已经传了 contents，就原样转发
+    // 如果前端已经传了 Gemini 原生 contents，就原样转发
+    // 否则兼容旧格式：prompt + imageBase64
     const geminiPayload = body.contents
       ? {
           contents: body.contents,
-          ...(body.generationConfig ? { generationConfig: body.generationConfig } : {})
+          ...(body.generationConfig
+            ? { generationConfig: body.generationConfig }
+            : {})
         }
       : {
           contents: [
@@ -68,13 +87,18 @@ exports.handler = async (event) => {
                 {
                   inline_data: {
                     mime_type: 'image/jpeg',
-                    data: (body.imageBase64 || '').replace(/^data:image\/\w+;base64,/, '')
+                    data: (body.imageBase64 || '').replace(
+                      /^data:image\/\w+;base64,/,
+                      ''
+                    )
                   }
                 }
               ]
             }
           ],
-          ...(body.generationConfig ? { generationConfig: body.generationConfig } : {})
+          ...(body.generationConfig
+            ? { generationConfig: body.generationConfig }
+            : {})
         };
 
     const response = await fetch(
@@ -92,14 +116,20 @@ exports.handler = async (event) => {
 
     return {
       statusCode: response.status,
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json'
+      },
       body: JSON.stringify(data)
     };
   } catch (error) {
     return {
       statusCode: 500,
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ error: { message: error.message } })
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        error: { message: error.message }
+      })
     };
   }
 };

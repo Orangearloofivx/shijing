@@ -2,6 +2,8 @@ exports.handler = async (event) => {
   const OPENAI_KEY = process.env.OPENAI_API_KEY;
   const GEMINI_KEY = process.env.GEMINI_API_KEY;
 
+
+  
   if (event.httpMethod !== 'POST') {
     return {
       statusCode: 200,

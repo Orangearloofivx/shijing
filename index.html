@@ -1401,23 +1401,34 @@ async function generateFromRef() {
 }
 
 // ═══════════════════════════════════════════════
-//  STORAGE (persistent + localStorage fallback)
+//  SUPABASE (跨设备持久化)
 // ═══════════════════════════════════════════════
-const STORAGE_KEY = 'shijing-materials-v1';
+const SUPABASE_URL = 'https://zehfyibwmxyedswbdyjw.supabase.co';
+const SUPABASE_KEY = 'sb_publishable_wGGWRcVnkzfIWK4Pp42J8w_vhoTBsKg';
 let customMaterials = [];
 
 async function loadCustomMaterials() {
   try {
-    const r = await window.storage.get(STORAGE_KEY);
-    return r ? JSON.parse(r.value) : [];
-  } catch {
-    try { const l = localStorage.getItem(STORAGE_KEY); return l ? JSON.parse(l) : []; } catch { return []; }
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/materials?order=created_at.asc`, {
+      headers: {
+        'apikey': SUPABASE_KEY,
+        'Authorization': `Bearer ${SUPABASE_KEY}`
+      }
+    });
+    if (!res.ok) throw new Error('fetch failed');
+    const data = await res.json();
+    return data.map(row => ({
+      id: row.id,
+      name: row.name,
+      nameEn: row.name_en,
+      cat: row.cat,
+      desc: row.description,
+      img: row.img
+    }));
+  } catch (e) {
+    console.warn('Supabase 加载失败，使用 localStorage 备份:', e);
+    try { const l = localStorage.getItem('shijing-materials-v1'); return l ? JSON.parse(l) : []; } catch { return []; }
   }
-}
-async function saveCustomMaterials(mats) {
-  const json = JSON.stringify(mats);
-  try { await window.storage.set(STORAGE_KEY, json); } catch {}
-  try { localStorage.setItem(STORAGE_KEY, json); } catch {}
 }
 
 async function analyzePhoto() {
@@ -1530,6 +1541,11 @@ async function analyzePhoto() {
 // ═══════════════════════════════════════════════
 async function generateDalleImage() {
   if (!uploadedImgBase64) return;
+  const res = await fetch('/.netlify/functions/analyze', {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({ imageBase64: uploadedImgBase64, prompt })
+});
 
   // Show section + loading
   document.getElementById('dalle-section').style.display = 'block';

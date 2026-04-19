@@ -147,14 +147,3 @@ Admin (admin.html)
 
 ---
 
-## Repository structure
-
-```text
-.
-├── index.html      # Main customer-facing application
-├── admin.html      # Admin panel for managing materials
-└── README.md
-```
-
-> Note: this repository currently contains the frontend and admin interface. The serverless function used at `/.netlify/functions/analyze` should be deployed separately in the corresponding Netlify functions directory.
-

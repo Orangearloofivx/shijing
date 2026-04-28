@@ -329,6 +329,33 @@ input[type=range].slim::-webkit-slider-thumb{
 @keyframes dot-pulse{0%,80%,100%{transform:scale(0.6);opacity:0.4}40%{transform:scale(1);opacity:1}}
 .plan-loading-text{font-family:'Cormorant Garamond',serif;font-style:italic;font-size:0.75rem;color:var(--stone);}
 
+/* ─── STREAMING PREVIEW ─── */
+.plan-stream-preview{
+  padding:1.4rem 1.6rem;
+  background:var(--ivory);border:1px solid var(--border);
+  margin-bottom:1.5rem;position:relative;overflow:hidden;
+  display:none;
+}
+.stream-label{
+  font-size:0.52rem;letter-spacing:0.28em;color:var(--ash);
+  font-family:'Cormorant Garamond',serif;margin-bottom:0.8rem;
+}
+.stream-text{
+  font-size:0.7rem;color:var(--stone);
+  font-family:'Cormorant Garamond',serif;font-style:italic;
+  line-height:1.9;white-space:pre-wrap;word-break:break-word;
+  max-height:180px;overflow:hidden;
+  mask-image:linear-gradient(to bottom,black 55%,transparent 100%);
+  -webkit-mask-image:linear-gradient(to bottom,black 55%,transparent 100%);
+}
+.stream-cursor{
+  display:inline-block;width:2px;height:0.85em;
+  background:var(--clay);margin-left:2px;
+  animation:blink 0.75s step-end infinite;
+  vertical-align:text-bottom;
+}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:0}}
+
 .enquire-final{
   width:100%;margin-top:2rem;
   padding:1rem;background:var(--deep);color:var(--rice);
@@ -1002,7 +1029,13 @@ footer{
       <div class="plan-loading-dots">
         <span></span><span></span><span></span>
       </div>
-      <div class="plan-loading-text">AI 正在分析您的空间，生成专属造园方案…</div>
+      <div class="plan-loading-text">AI 正在生成造园方案…</div>
+    </div>
+
+    <div class="plan-stream-preview" id="plan-stream-preview">
+      <div class="stream-label">AI GENERATING · 实时生成中</div>
+      <div class="stream-text" id="plan-stream-text"></div>
+      <span class="stream-cursor"></span>
     </div>
 
     <div class="plan-container" id="plan-container">
@@ -1921,16 +1954,17 @@ function drawTexture(ctx, type, w, h) {
 async function generatePlan() {
   const btn = document.getElementById('gen-plan-btn');
   const sp = document.getElementById('spinner3');
-  btn.disabled = true; sp.style.display = 'block';
+  btn.disabled = true;
+  sp.style.display = 'block';
   document.getElementById('gen-btn-text').textContent = '生成中…';
   document.getElementById('plan-loading').style.display = 'block';
   document.getElementById('plan-container').style.display = 'none';
+  document.getElementById('plan-stream-preview').style.display = 'none';
 
   const mat = materials.find(m => m.id === selectedMatId);
   const userNotes = document.getElementById('user-notes')?.value.trim() || '';
 
-  // 优先用用户手选的参考风格，其次才用AI分析结果
-  const refStyle = selectedRefId ? REF_STYLES.find(r=>r.id===selectedRefId) : null;
+  const refStyle = selectedRefId ? REF_STYLES.find(r => r.id === selectedRefId) : null;
   const chosenStyle = refStyle?.name || aiAnalysis?.styleName || '现代简约庭院';
   const chosenStyleEn = refStyle?.nameEn || '';
   const aiDesc = aiAnalysis?.description || '';
@@ -1945,76 +1979,142 @@ async function generatePlan() {
   ].filter(Boolean).join('\n');
   const areaText = hasArea ? areaLines : '用户未填写，材料用量给出合理参考范围';
 
-  const prompt = `你是专业庭院设计师，专注中日式及各类风格户外空间。请严格按照用户选择的风格生成造园方案，只返回JSON不要其他文字。
-
-【用户选定风格】${chosenStyle}${chosenStyleEn ? `（${chosenStyleEn}）` : ''} ← 这是最重要的设计依据，方案必须忠实呈现此风格的核心特征
-【用户主选石材】${mat?.name || '莱姆石'}（${mat?.nameEn || 'Limestone'}）← 这是用户最感兴趣的材料，应作为主材重点推荐
+  const systemPrompt = `你是专业庭院设计师，专注中日式及各类风格户外空间。严格按用户选定风格生成造园方案。`;
+  const userPrompt = `【用户选定风格】${chosenStyle}${chosenStyleEn ? `（${chosenStyleEn}）` : ''}
+【用户主选石材】${mat?.name || '莱姆石'}（${mat?.nameEn || 'Limestone'}）
 【用户填写面积】
 ${areaText}
 【AI分析院子现状】${aiDesc || '暂无'}
 【用户的想法与需求】${userNotes || '暂无额外备注'}
 
 要求：
-- styleDirection和concept必须明确体现"${chosenStyle}"的风格特征，不可混淆成其他风格
-- materials第一项必须是用户主选的"${mat?.name || '莱姆石'}"，后续材料也应符合${chosenStyle}风格
+- styleDirection 和 concept 必须明确体现"${chosenStyle}"的风格特征
+- materials 第一项必须是用户主选的"${mat?.name || '莱姆石'}"，后续材料符合 ${chosenStyle} 风格
 - 有面积数据时给出精确用量，无面积时给合理范围
 - 如用户有特殊需求，在设计中体现
+- styleDirection：2-3 句风格定位
+- concept：3-4 句设计理念
+- materials：3-5 种材料，每项含 name/use/quantity/price
+- constructionNotes：施工要点 3-4 条，用 • 分隔
+- plantingPairing：植物搭配 2-3 段`;
 
-返回格式：
-{
-  "styleDirection": "2-3句风格定位（必须明确体现${chosenStyle}的特征）",
-  "concept": "3-4句设计理念（结合用户需求和院子现状）",
-  "materials": [
-    {"name":"材料名","use":"具体用途","quantity":"${hasArea?'精确用量':'参考用量范围'}","price":"参考价格区间如¥80-120/㎡"},
-    ...共3-5种
-  ],
-  "constructionNotes": "施工要点3-4条，用•分隔",
-  "plantingPairing": "植物搭配2-3段（符合${chosenStyle}风格）"
-}`;
+  let accumulated = '';
+  let streamErr = null;
 
   try {
-    const response = await fetch('/.netlify/functions/analyze', {
+    const resp = await fetch('/api/plan-stream', {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json'
-      },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        model: 'gpt-4o',
-        max_tokens: 1200,
-        messages: [{ role: 'user', content: prompt }]
+        messages: [
+          { role: 'system', content: systemPrompt },
+          { role: 'user', content: userPrompt }
+        ]
       })
     });
-    const data = await response.json();
-    console.log('analyze raw response:', data);
 
-    if (!response.ok || data.error) {
-      throw new Error(data?.error?.message || 'Request failed');
+    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+
+    // Switch to streaming preview once connection is established
+    document.getElementById('plan-loading').style.display = 'none';
+    document.getElementById('plan-stream-preview').style.display = 'block';
+    const streamEl = document.getElementById('plan-stream-text');
+
+    const reader = resp.body.getReader();
+    const decoder = new TextDecoder();
+    let buf = '';
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+
+      buf += decoder.decode(value, { stream: true });
+      const lines = buf.split('\n');
+      buf = lines.pop(); // keep last incomplete line
+
+      for (const line of lines) {
+        if (!line.startsWith('data: ')) continue;
+        const payload = line.slice(6).trim();
+        if (payload === '[DONE]') continue;
+        try {
+          const chunk = JSON.parse(payload);
+          const delta = chunk.choices?.[0]?.delta?.content ?? '';
+          if (delta) {
+            accumulated += delta;
+            // Show readable preview: strip JSON scaffolding, show content values only
+            streamEl.textContent = extractReadableText(accumulated);
+            streamEl.scrollTop = streamEl.scrollHeight;
+          }
+        } catch { /* partial SSE chunk — skip */ }
+      }
     }
-
-    const text = data?.choices?.[0]?.message?.content;
-    if (!text) throw new Error('No content returned');
-    const plan = JSON.parse(text.replace(/```json|```/g,'').trim());
-    renderPlan(plan);
-  } catch(e) {
-    // Fallback — 用选定的风格和材料
-    const fallbackMat = mat?.name || '莱姆石';
-    const fallbackStyle = chosenStyle;
-    renderPlan({
-      styleDirection: `以${fallbackStyle}为核心风格，结合${fallbackMat}的材质特性，打造与用户生活方式契合的庭院空间。整体遵循${fallbackStyle}的美学逻辑，在比例、材料与植物之间寻求平衡。`,
-      concept: `方案以用户需求为出发点，以${fallbackMat}作为铺装主材，通过材料的质感与色调统一空间气质。${userNotes ? `特别考虑到用户提到的"${userNotes.slice(0,30)}"，` : ''}设计注重实用与美观的结合，营造可长期享用的庭院。`,
-      materials: [
-        {name: fallbackMat, use:'主铺装地面', quantity: area.main > 0 ? `${area.main}㎡` : '约15-25㎡', price:'¥100-180/㎡'},
-        {name: '青板岩', use:'步道踏石', quantity: area.path > 0 ? `${area.path}㎡` : '约6-10㎡', price:'¥80-130/㎡'},
-        {name: '鹅卵石', use:'装饰填充', quantity:'适量', price:'¥30-50/㎡'},
-        {name: '黄砂岩', use:'景墙贴面', quantity: area.wall > 0 ? `${area.wall}㎡` : '约5-8㎡', price:'¥90-140/㎡'},
-      ],
-      constructionNotes: `• 铺装前处理好基层排水，坡度1%-2%避免积水\n• ${fallbackMat}缝隙3-5mm，用同色勾缝剂收边\n• 踏石间距60-65cm，按正常步幅布置\n• 景墙高度建议1.2-1.5m，兼顾私密性与通透感`,
-      plantingPairing: `根据${fallbackStyle}的风格特点，植物配置以简洁为主，避免过于繁杂。\n\n主景植物可选形态感强的品种，与${fallbackMat}的质感相互衬托，形成视觉焦点。\n\n地被与边界植物以低矮、易打理的品种为主，减少后期维护负担。`
-    });
+  } catch (e) {
+    streamErr = e;
+    console.error('Streaming error:', e);
   }
 
-  btn.disabled = false; sp.style.display = 'none';
+  document.getElementById('plan-stream-preview').style.display = 'none';
+  document.getElementById('plan-loading').style.display = 'none';
+
+  if (!streamErr && accumulated) {
+    try {
+      const plan = JSON.parse(accumulated.replace(/```json|```/g, '').trim());
+      renderPlan(plan);
+    } catch {
+      renderPlan(buildFallbackPlan(mat, chosenStyle, userNotes, area));
+    }
+  } else {
+    renderPlan(buildFallbackPlan(mat, chosenStyle, userNotes, area));
+  }
+
+  btn.disabled = false;
+  sp.style.display = 'none';
   document.getElementById('gen-btn-text').textContent = '重新生成';
+}
+
+// Extract only the string values from partial JSON for a readable live preview
+function extractReadableText(raw) {
+  let out = '';
+  let inStr = false;
+  let isKey = true;  // track whether current string is a key or value
+  let braceDepth = 0;
+  let escaped = false;
+
+  for (let i = 0; i < raw.length; i++) {
+    const c = raw[i];
+    if (escaped) { escaped = false; if (inStr && !isKey) out += c === 'n' ? '\n' : c; continue; }
+    if (c === '\\') { escaped = true; continue; }
+    if (c === '"') {
+      if (!inStr) { inStr = true; }
+      else { inStr = false; isKey = true; }
+      continue;
+    }
+    if (!inStr) {
+      if (c === '{') { braceDepth++; isKey = true; }
+      if (c === '}') braceDepth--;
+      if (c === ':') isKey = false;
+      if (c === ',') isKey = true;
+      continue;
+    }
+    if (inStr && !isKey) out += c;
+  }
+  return out.trim();
+}
+
+function buildFallbackPlan(mat, chosenStyle, userNotes, area) {
+  const fallbackMat = mat?.name || '莱姆石';
+  return {
+    styleDirection: `以${chosenStyle}为核心风格，结合${fallbackMat}的材质特性，打造与用户生活方式契合的庭院空间。整体遵循${chosenStyle}的美学逻辑，在比例、材料与植物之间寻求平衡。`,
+    concept: `方案以用户需求为出发点，以${fallbackMat}作为铺装主材，通过材料的质感与色调统一空间气质。${userNotes ? `特别考虑到用户提到的"${userNotes.slice(0, 30)}"，` : ''}设计注重实用与美观的结合，营造可长期享用的庭院。`,
+    materials: [
+      { name: fallbackMat, use: '主铺装地面', quantity: area.main > 0 ? `${area.main}㎡` : '约15-25㎡', price: '¥100-180/㎡' },
+      { name: '青板岩', use: '步道踏石', quantity: area.path > 0 ? `${area.path}㎡` : '约6-10㎡', price: '¥80-130/㎡' },
+      { name: '鹅卵石', use: '装饰填充', quantity: '适量', price: '¥30-50/㎡' },
+      { name: '黄砂岩', use: '景墙贴面', quantity: area.wall > 0 ? `${area.wall}㎡` : '约5-8㎡', price: '¥90-140/㎡' },
+    ],
+    constructionNotes: `• 铺装前处理好基层排水，坡度1%-2%避免积水\n• ${fallbackMat}缝隙3-5mm，用同色勾缝剂收边\n• 踏石间距60-65cm，按正常步幅布置\n• 景墙高度建议1.2-1.5m，兼顾私密性与通透感`,
+    plantingPairing: `根据${chosenStyle}的风格特点，植物配置以简洁为主，避免过于繁杂。\n\n主景植物可选形态感强的品种，与${fallbackMat}的质感相互衬托，形成视觉焦点。\n\n地被与边界植物以低矮、易打理的品种为主，减少后期维护负担。`
+  };
 }
 
 function renderPlan(plan) {

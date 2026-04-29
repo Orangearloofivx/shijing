@@ -1464,8 +1464,11 @@ async function loadCustomMaterials() {
     const data = await res.json();
     return data.map(row => ({
       id: row.id,
-      name: row.name,
-      nameEn: row.name_en,
+      name: row.material,
+      color: row.color,
+      spec: row.spec,
+      price: row.price,
+      unit: row.unit,
       cat: row.cat,
       desc: row.description,
       img: row.img
@@ -1676,8 +1679,8 @@ async function generateDalleImage() {
   const mat = selectedMatId
     ? materials.find(m => m.id === selectedMatId)
     : materials.find(m => m.id === (aiAnalysis?.recommendedMaterials?.[0]));
-  const matNameEn = mat?.nameEn || recipe.ground.split(' ')[0];
-  const matName = mat ? `${mat.name} (${mat.nameEn})` : recipe.style;
+  const matNameEn = mat?.nameEn || mat?.name || recipe.ground.split(' ')[0];
+  const matName = mat ? `${mat.name}${mat.nameEn ? ` (${mat.nameEn})` : ''}` : recipe.style;
 
   const prompt =
     `Transform this garden photo into a stunning ${recipe.style}. `
@@ -1830,7 +1833,7 @@ function renderMatSidebar() {
         <canvas class="mat-thumb-sm" id="mts-${m.id}"></canvas>
         <div>
           <div class="mat-item-name">${m.name}</div>
-          <div class="mat-item-en">${m.nameEn}</div>
+          ${m.nameEn || m.color ? `<div class="mat-item-en">${m.nameEn || m.color}</div>` : ''}
         </div>
         <span class="mat-check">✓</span>
       </div>
@@ -1994,7 +1997,7 @@ async function generatePlan() {
 
   const systemPrompt = `你是专业庭院设计师，专注中日式及各类风格户外空间。严格按用户选定风格生成造园方案。`;
   const userPrompt = `【用户选定风格】${chosenStyle}${chosenStyleEn ? `（${chosenStyleEn}）` : ''}
-【用户主选石材】${mat?.name || '莱姆石'}（${mat?.nameEn || 'Limestone'}）
+【用户主选石材】${mat?.name || '莱姆石'}${mat?.color ? `（${mat.color}）` : ''}
 【用户填写面积】
 ${areaText}
 【AI分析院子现状】${aiDesc || '暂无'}

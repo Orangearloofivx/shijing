@@ -159,12 +159,24 @@ footer{
     <div class="form-title">ADD NEW MATERIAL · 添加新材料</div>
     <div class="form-grid">
       <div class="form-field">
-        <label class="form-label">材料名称（中文）</label>
-        <input class="form-input" id="f-name" placeholder="例：莱姆石" maxlength="20">
+        <label class="form-label">材料名称 · Material</label>
+        <input class="form-input" id="f-material" placeholder="例：莱姆石" maxlength="40">
       </div>
       <div class="form-field">
-        <label class="form-label">Material Name (English)</label>
-        <input class="form-input" id="f-name-en" placeholder="e.g. Limestone" maxlength="30">
+        <label class="form-label">颜色 · Color</label>
+        <input class="form-input" id="f-color" placeholder="例：米白色" maxlength="30">
+      </div>
+      <div class="form-field">
+        <label class="form-label">规格 · Spec</label>
+        <input class="form-input" id="f-spec" placeholder="例：600×300×20mm" maxlength="50">
+      </div>
+      <div class="form-field">
+        <label class="form-label">单价 · Price</label>
+        <input class="form-input" id="f-price" placeholder="例：120" type="number" min="0" step="0.01">
+      </div>
+      <div class="form-field">
+        <label class="form-label">单位 · Unit</label>
+        <input class="form-input" id="f-unit" placeholder="例：元/㎡" maxlength="20">
       </div>
       <div class="form-field">
         <label class="form-label">分类 · Category</label>
@@ -236,8 +248,11 @@ async function loadMaterials() {
     const data = await sbFetch('materials?order=created_at.asc');
     return data.map(row => ({
       id: row.id,
-      name: row.name,
-      nameEn: row.name_en,
+      material: row.material,
+      color: row.color,
+      spec: row.spec,
+      price: row.price,
+      unit: row.unit,
       cat: row.cat,
       desc: row.description,
       img: row.img
@@ -266,12 +281,15 @@ document.getElementById('admin-img-input').addEventListener('change', e => {
 
 // ─── 添加材料 ───────────────────────────────────
 async function addMaterial() {
-  const name = document.getElementById('f-name').value.trim();
-  const nameEn = document.getElementById('f-name-en').value.trim();
+  const material = document.getElementById('f-material').value.trim();
+  const color = document.getElementById('f-color').value.trim();
+  const spec = document.getElementById('f-spec').value.trim();
+  const price = document.getElementById('f-price').value;
+  const unit = document.getElementById('f-unit').value.trim();
   const cat = document.getElementById('f-cat').value;
   const desc = document.getElementById('f-desc').value.trim();
 
-  if (!name) { showNotify('请填写材料名称'); return; }
+  if (!material) { showNotify('请填写材料名称'); return; }
   if (!adminImgBase64) { showNotify('请上传材料图片'); return; }
 
   const btn = document.querySelector('.btn-add-mat');
@@ -283,8 +301,11 @@ async function addMaterial() {
       method: 'POST',
       body: JSON.stringify({
         id: 'mat-' + Date.now(),
-        name,
-        name_en: nameEn || name,
+        material,
+        color: color || null,
+        spec: spec || null,
+        price: price !== '' ? parseFloat(price) : null,
+        unit: unit || null,
         cat,
         description: desc,
         img: adminImgBase64
@@ -293,7 +314,7 @@ async function addMaterial() {
     customMaterials = await loadMaterials();
     renderAdminList();
     resetForm();
-    showNotify(`✓ 已添加：${name}，所有设备刷新主页即可看到`);
+    showNotify(`✓ 已添加：${material}，所有设备刷新主页即可看到`);
   } catch (e) {
     showNotify('添加失败：' + e.message);
   } finally {
@@ -305,12 +326,12 @@ async function addMaterial() {
 // ─── 删除材料 ───────────────────────────────────
 async function deleteMaterial(id) {
   const mat = customMaterials.find(m => m.id === id);
-  if (!mat || !confirm(`确定删除「${mat.name}」？`)) return;
+  if (!mat || !confirm(`确定删除「${mat.material}」？`)) return;
   try {
     await sbFetch(`materials?id=eq.${id}`, { method: 'DELETE' });
     customMaterials = await loadMaterials();
     renderAdminList();
-    showNotify(`已删除：${mat.name}`);
+    showNotify(`已删除：${mat.material}`);
   } catch (e) {
     showNotify('删除失败：' + e.message);
   }
@@ -334,15 +355,13 @@ function renderAdminList() {
 
   list.innerHTML = customMaterials.map(m => `
     <div class="admin-mat-item">
-      <img class="admin-thumb" src="${m.img}" alt="${m.name}">
+      <img class="admin-thumb" src="${m.img}" alt="${m.material}">
       <div class="admin-mat-info">
         <div class="admin-mat-name">
-          ${m.name}
-          <span style="font-size:0.6rem;color:var(--ash);font-family:'Cormorant Garamond',serif;font-style:italic">
-            ${m.nameEn}
-          </span>
+          ${m.material}
+          ${m.color ? `<span style="font-size:0.6rem;color:var(--ash);font-family:'Cormorant Garamond',serif;font-style:italic"> · ${m.color}</span>` : ''}
         </div>
-        <div class="admin-mat-cat">${m.cat}</div>
+        <div class="admin-mat-cat">${m.cat}${m.spec ? ` · ${m.spec}` : ''}${m.price != null ? ` · ${m.price}${m.unit ? m.unit : ''}` : ''}</div>
         ${m.desc ? `<div class="admin-mat-desc-p">${m.desc.slice(0,60)}${m.desc.length > 60 ? '…' : ''}</div>` : ''}
       </div>
       <button class="btn-delete" onclick="deleteMaterial('${m.id}')">删除</button>
@@ -352,8 +371,11 @@ function renderAdminList() {
 
 // ─── 重置表单 ───────────────────────────────────
 function resetForm() {
-  document.getElementById('f-name').value = '';
-  document.getElementById('f-name-en').value = '';
+  document.getElementById('f-material').value = '';
+  document.getElementById('f-color').value = '';
+  document.getElementById('f-spec').value = '';
+  document.getElementById('f-price').value = '';
+  document.getElementById('f-unit').value = '';
   document.getElementById('f-desc').value = '';
   document.getElementById('f-cat').value = '石材';
   adminImgBase64 = null;
